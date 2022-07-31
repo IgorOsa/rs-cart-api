@@ -1,21 +1,40 @@
-# Base
-FROM node:16-alpine
+# BUILD FOR DEVELOPMENT
+FROM node:16-alpine as development
 
 WORKDIR /app
 
-# Dependencies installation
 COPY package*.json ./
-RUN npm ci && npm cache clean --force
 
-# Build commands
+RUN npm ci
+
 COPY . .
-RUN npm run build
 
-# Application configs
 USER node
-ENV PORT=4000
+
+# BUILD FOR PRODUCTION
+FROM node:16-alpine as build
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY --from=development /app/node_modules ./node_modules
+COPY . .
+
+ENV NODE_ENV production
+
+RUN npm run build && npm ci --only=production && npm cache clean --force
+
+USER node
+
+# RUN PRODUCTION
+FROM node:16-alpine as production
+
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./
+
 EXPOSE 4000
 
 ENTRYPOINT [ "npm", "run" ]
 
-CMD ["start"]
+CMD [ "start:prod" ]
